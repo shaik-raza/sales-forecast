@@ -1,0 +1,6 @@
+venv/
+__pycache__/
+*.pyc
+.env
+Data/raw/
+sales_forecast.db

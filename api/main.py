@@ -1,0 +1,15 @@
+from fastapi import FastAPI
+from prometheus_fastapi_instrumentator import Instrumentator
+from api.forecast.routes import router as forecast_router
+from api.auth.routes import router as auth_router
+
+app = FastAPI(title="Sales Forecast API")
+
+app.include_router(forecast_router)
+app.include_router(auth_router)
+
+@app.get("/health")
+def health_check():
+    return {"status": "ok"}
+
+Instrumentator().instrument(app).expose(app)
