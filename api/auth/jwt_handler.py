@@ -1,10 +1,11 @@
+import os
 from datetime import datetime, timedelta
 from jose import jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException
 from fastapi.security import HTTPBearer
 
-SECRET_KEY = "change-this-to-a-random-secret-key-later"
+SECRET_KEY = os.getenv("SECRET_KEY", "change-this-to-a-random-secret-key-later")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 60
 
