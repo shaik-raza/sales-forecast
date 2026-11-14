@@ -1,8 +1,12 @@
-from pydantic import BaseModel
+from datetime import date
 from typing import Dict
+
+from pydantic import BaseModel
+
 
 class ForecastRequest(BaseModel):
     Store: int
+    Date: date
     DayOfWeek: int
     Promo: int
     StateHoliday: int
@@ -23,9 +27,8 @@ class ForecastRequest(BaseModel):
 class ForecastResponse(BaseModel):
     predicted_sales: float
 
-class CompareRequest(BaseModel):
-    Store: int
-    Date: str  # format: "YYYY-MM-DD" - needed for Prophet/SARIMA which forecast by date
+class CompareRequest(ForecastRequest):
+    pass
 
 class ModelComparisonResponse(BaseModel):
     predictions: Dict[str, float]

@@ -1,60 +1,30 @@
-import pandas as pd
-import numpy as np
+"""Tune and train the all-store XGBoost model."""
+
 from xgboost import XGBRegressor
-from sklearn.metrics import mean_absolute_error, mean_squared_error
-import joblib
-import os
 
-# Load cleaned data
-df = pd.read_csv("Data/processed/train_merged_clean.csv")
-df['Date'] = pd.to_datetime(df['Date'])
+from ml.models.training_common import RANDOM_STATE, train_and_save
 
-# Sort by date - important for time series
-df = df.sort_values('Date')
 
-# Features to use for prediction
-features = [
-    'Store', 'DayOfWeek', 'Promo', 'StateHoliday', 'SchoolHoliday',
-    'StoreType', 'Assortment', 'CompetitionDistance',
-    'CompetitionOpenSinceMonth', 'CompetitionOpenSinceYear',
-    'Promo2', 'Promo2SinceWeek', 'Promo2SinceYear',
-    'Year', 'Month', 'Day', 'WeekOfYear'
-]
-target = 'Sales'
+def make_model(parameters: dict) -> XGBRegressor:
+    return XGBRegressor(
+        objective="reg:squarederror",
+        tree_method="hist",
+        n_jobs=2,
+        random_state=RANDOM_STATE,
+        **parameters,
+    )
 
-X = df[features]
-y = df[target]
 
-# Time-based split: last 6 weeks as test set (not random shuffling!)
-split_date = df['Date'].max() - pd.Timedelta(weeks=6)
-train_mask = df['Date'] <= split_date
-test_mask = df['Date'] > split_date
+def search_space(trial):
+    return {
+        "n_estimators": trial.suggest_int("n_estimators", 150, 400, step=50),
+        "max_depth": trial.suggest_int("max_depth", 4, 8),
+        "learning_rate": trial.suggest_float("learning_rate", 0.03, 0.15, log=True),
+        "subsample": trial.suggest_float("subsample", 0.7, 1.0),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.7, 1.0),
+        "min_child_weight": trial.suggest_int("min_child_weight", 1, 10),
+    }
 
-X_train, X_test = X[train_mask], X[test_mask]
-y_train, y_test = y[train_mask], y[test_mask]
 
-print(f"Train size: {len(X_train)}, Test size: {len(X_test)}")
-
-# Train model
-model = XGBRegressor(
-    n_estimators=200,
-    max_depth=6,
-    learning_rate=0.1,
-    random_state=42
-)
-model.fit(X_train, y_train)
-
-# Evaluate
-preds = model.predict(X_test)
-mae = mean_absolute_error(y_test, preds)
-rmse = np.sqrt(mean_squared_error(y_test, preds))
-mape = np.mean(np.abs((y_test - preds) / y_test)) * 100
-
-print(f"MAE: {mae:.2f}")
-print(f"RMSE: {rmse:.2f}")
-print(f"MAPE: {mape:.2f}%")
-
-# Save model
-os.makedirs("ml/artifacts", exist_ok=True)
-joblib.dump(model, "ml/artifacts/xgboost_model.pkl")
-print("Model saved to ml/artifacts/xgboost_model.pkl")
+if __name__ == "__main__":
+    train_and_save("xgboost", make_model, search_space)

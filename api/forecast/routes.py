@@ -1,41 +1,146 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
+from functools import lru_cache
+import json
+from pathlib import Path
+from typing import Any
+
 import joblib
 import pandas as pd
-from api.forecast.schemas import ForecastRequest, ForecastResponse, CompareRequest, ModelComparisonResponse
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
 from api.auth.jwt_handler import get_current_user
-from api.db.database import get_db, engine, Base
+from api.db.database import Base, engine, get_db
 from api.db.models import ForecastHistory
+from api.forecast.schemas import (
+    CompareRequest,
+    ForecastRequest,
+    ForecastResponse,
+    ModelComparisonResponse,
+)
+from ml.features import FEATURE_COLUMNS, build_features
 
 Base.metadata.create_all(bind=engine)
 
 router = APIRouter()
+ARTIFACT_DIR = Path("ml/artifacts")
+DATA_PATH = Path("Data/processed/train_merged_clean.csv")
+MODEL_NAMES = ("xgboost", "lightgbm", "catboost", "random_forest")
 
-xgb_model = joblib.load("ml/artifacts/xgboost_model.pkl")
-store_df = pd.read_csv("Data/raw/store.csv")
 
-storetype_map = {'a': 1, 'b': 2, 'c': 3, 'd': 4}
-assortment_map = {'a': 1, 'b': 2, 'c': 3}
+@lru_cache(maxsize=1)
+def _load_models() -> tuple[dict[str, Any], dict[str, float]]:
+    """Load model artifacts once, on the first forecast request."""
+    models = {
+        name: joblib.load(ARTIFACT_DIR / f"{name}.joblib")["model"]
+        for name in MODEL_NAMES
+    }
+    ensemble = joblib.load(ARTIFACT_DIR / "ensemble.joblib")
+    return models, ensemble["weights"]
+
+
+@lru_cache(maxsize=1)
+def _load_metrics() -> dict[str, Any]:
+    """Load metrics only when the metrics endpoint is requested."""
+    with (ARTIFACT_DIR / "model_metrics.json").open(encoding="utf-8") as metrics_file:
+        return json.load(metrics_file)
+
+
+def _historical_store_rows(store: int, date: pd.Timestamp) -> pd.DataFrame:
+    columns = [
+        "Store",
+        "DayOfWeek",
+        "Date",
+        "Sales",
+        "Promo",
+        "StateHoliday",
+        "SchoolHoliday",
+        "StoreType",
+        "Assortment",
+        "CompetitionDistance",
+        "CompetitionOpenSinceMonth",
+        "CompetitionOpenSinceYear",
+        "Promo2",
+        "Promo2SinceWeek",
+        "Promo2SinceYear",
+        "PromoInterval",
+        "Year",
+        "Month",
+        "Day",
+        "WeekOfYear",
+    ]
+    data = pd.read_csv(DATA_PATH, usecols=columns)
+    history = data[(data["Store"] == store) & (pd.to_datetime(data["Date"]) < date)]
+    if history.empty:
+        raise HTTPException(status_code=400, detail=f"No historical data found for store {store}")
+    return history
+
+
+def _request_row(request_data: dict[str, Any], date: pd.Timestamp) -> pd.DataFrame:
+    row = request_data.copy()
+    row.update(
+        {
+            "Date": date,
+            "Sales": 0.0,
+            "Year": date.year,
+            "Month": date.month,
+            "Day": date.day,
+            "DayOfWeek": date.dayofweek + 1,
+            "WeekOfYear": int(date.isocalendar().week),
+        }
+    )
+    row.setdefault("PromoInterval", "None")
+    return pd.DataFrame([row])
+
+
+def _features_for_request(request_data: dict[str, Any], date: pd.Timestamp) -> pd.DataFrame:
+    history = _historical_store_rows(int(request_data["Store"]), date)
+    row = _request_row(request_data, date)
+    combined = pd.concat([history, row], ignore_index=True)
+    engineered = build_features(combined)
+    values = engineered.iloc[[-1]][FEATURE_COLUMNS].copy()
+    values = values.fillna(0)
+    return values
+
+
+def _predictions(features: pd.DataFrame) -> dict[str, float]:
+    models, weights = _load_models()
+    predictions = {
+        name: float(models[name].predict(features)[0]) for name in MODEL_NAMES
+    }
+    predictions["ensemble"] = sum(weights[name] * predictions[name] for name in MODEL_NAMES)
+    return {name: round(value, 2) for name, value in predictions.items()}
+
+
+def _save_history(
+    predictions: dict[str, float],
+    store: int,
+    current_user: str,
+    db: Session,
+    model_names: tuple[str, ...],
+) -> None:
+    for model_name in model_names:
+        db.add(
+            ForecastHistory(
+                user_email=current_user,
+                store=store,
+                model_used=model_name,
+                predicted_sales=predictions[model_name],
+            )
+        )
+    db.commit()
 
 
 @router.post("/forecast", response_model=ForecastResponse)
 def forecast(
     request: ForecastRequest,
     current_user: str = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    input_data = pd.DataFrame([request.model_dump()])
-    prediction = round(float(xgb_model.predict(input_data)[0]), 2)
-
-    history_entry = ForecastHistory(
-        user_email=current_user,
-        store=request.Store,
-        model_used="xgboost",
-        predicted_sales=prediction
-    )
-    db.add(history_entry)
-    db.commit()
-
+    date = pd.Timestamp(request.Date)
+    features = _features_for_request(request.model_dump(), date)
+    predictions = _predictions(features)
+    prediction = predictions["ensemble"]
+    _save_history(predictions, request.Store, current_user, db, ("ensemble",))
     return ForecastResponse(predicted_sales=prediction)
 
 
@@ -43,67 +148,24 @@ def forecast(
 def compare_models(
     request: CompareRequest,
     current_user: str = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
-    predictions = {}
-
-    if request.Store != 1:
-        raise HTTPException(
-            status_code=400,
-            detail="Comparison currently only supported for Store 1 (Prophet/SARIMA trained on this store only)"
-        )
-
-    date = pd.to_datetime(request.Date)
-    store_row = store_df[store_df['Store'] == request.Store].iloc[0]
-
-    xgb_input = pd.DataFrame([{
-        'Store': request.Store,
-        'DayOfWeek': date.dayofweek + 1,
-        'Promo': 0,
-        'StateHoliday': 0,
-        'SchoolHoliday': 0,
-        'StoreType': storetype_map.get(store_row['StoreType'], 0),
-        'Assortment': assortment_map.get(store_row['Assortment'], 0),
-        'CompetitionDistance': store_row['CompetitionDistance'] if pd.notna(store_row['CompetitionDistance']) else 0,
-        'CompetitionOpenSinceMonth': store_row['CompetitionOpenSinceMonth'] if pd.notna(store_row['CompetitionOpenSinceMonth']) else 0,
-        'CompetitionOpenSinceYear': store_row['CompetitionOpenSinceYear'] if pd.notna(store_row['CompetitionOpenSinceYear']) else 0,
-        'Promo2': store_row['Promo2'],
-        'Promo2SinceWeek': store_row['Promo2SinceWeek'] if pd.notna(store_row['Promo2SinceWeek']) else 0,
-        'Promo2SinceYear': store_row['Promo2SinceYear'] if pd.notna(store_row['Promo2SinceYear']) else 0,
-        'Year': date.year,
-        'Month': date.month,
-        'Day': date.day,
-        'WeekOfYear': date.isocalendar()[1],
-    }])
-    predictions["xgboost"] = round(float(xgb_model.predict(xgb_input)[0]), 2)
-
-    prophet_model = joblib.load("ml/artifacts/prophet_store_1.pkl")
-    future = pd.DataFrame({"ds": [date]})
-    prophet_forecast = prophet_model.predict(future)
-    predictions["prophet"] = round(float(prophet_forecast["yhat"].iloc[0]), 2)
-
-    sarima_model = joblib.load("ml/artifacts/sarima_store_1.pkl")
-    sarima_forecast = sarima_model.forecast(steps=1)
-    predictions["sarima"] = round(float(sarima_forecast.iloc[-1]), 2)
-
-    # Save each model's prediction as a separate history entry
-    for model_name, pred_value in predictions.items():
-        history_entry = ForecastHistory(
-            user_email=current_user,
-            store=request.Store,
-            model_used=model_name,
-            predicted_sales=pred_value
-        )
-        db.add(history_entry)
-    db.commit()
-
+    date = pd.Timestamp(request.Date)
+    features = _features_for_request(request.model_dump(), date)
+    predictions = _predictions(features)
+    _save_history(predictions, request.Store, current_user, db, tuple(predictions))
     return ModelComparisonResponse(predictions=predictions)
+
+
+@router.get("/models/metrics")
+def get_model_metrics(current_user: str = Depends(get_current_user)):
+    return _load_metrics()
 
 
 @router.get("/history")
 def get_history(
     current_user: str = Depends(get_current_user),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     records = db.query(ForecastHistory).filter(
         ForecastHistory.user_email == current_user
@@ -114,7 +176,7 @@ def get_history(
             "store": r.store,
             "model_used": r.model_used,
             "predicted_sales": r.predicted_sales,
-            "requested_at": r.requested_at
+            "requested_at": r.requested_at,
         }
         for r in records
     ]

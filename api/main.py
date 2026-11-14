@@ -3,8 +3,10 @@ from prometheus_fastapi_instrumentator import Instrumentator
 from api.forecast.routes import router as forecast_router
 from api.auth.routes import router as auth_router
 
-app = FastAPI(title="Sales Forecast API")
-
+app = FastAPI(
+    title="Sales Forecast API",
+    swagger_ui_parameters={"persistAuthorization": True},
+)
 app.include_router(forecast_router)
 app.include_router(auth_router)
 
