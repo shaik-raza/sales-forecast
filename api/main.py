@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from prometheus_fastapi_instrumentator import Instrumentator
 from api.forecast.routes import router as forecast_router
 from api.auth.routes import router as auth_router
@@ -15,3 +16,4 @@ def health_check():
     return {"status": "ok"}
 
 Instrumentator().instrument(app).expose(app)
+app.mount("/", StaticFiles(directory="frontend", html=True), name="frontend")

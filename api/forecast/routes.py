@@ -45,6 +45,42 @@ def _load_metrics() -> dict[str, Any]:
         return json.load(metrics_file)
 
 
+@lru_cache(maxsize=1)
+def _load_store_details() -> pd.DataFrame:
+    columns = [
+        "Store",
+        "StoreType",
+        "Assortment",
+        "CompetitionDistance",
+        "CompetitionOpenSinceMonth",
+        "CompetitionOpenSinceYear",
+        "Promo2",
+        "Promo2SinceWeek",
+        "Promo2SinceYear",
+    ]
+    data = pd.read_csv(DATA_PATH, usecols=columns)
+    return data.drop_duplicates("Store").set_index("Store")
+
+
+@router.get("/stores/{store_id}")
+def get_store_details(store_id: int):
+    details = _load_store_details()
+    if store_id not in details.index:
+        raise HTTPException(status_code=404, detail=f"Store {store_id} was not found")
+    values = details.loc[store_id].where(pd.notna(details.loc[store_id]), 0)
+    return {
+        "Store": store_id,
+        "StoreType": int(values["StoreType"]),
+        "Assortment": int(values["Assortment"]),
+        "CompetitionDistance": float(values["CompetitionDistance"]),
+        "CompetitionOpenSinceMonth": float(values["CompetitionOpenSinceMonth"]),
+        "CompetitionOpenSinceYear": float(values["CompetitionOpenSinceYear"]),
+        "Promo2": int(values["Promo2"]),
+        "Promo2SinceWeek": float(values["Promo2SinceWeek"]),
+        "Promo2SinceYear": float(values["Promo2SinceYear"]),
+    }
+
+
 def _historical_store_rows(store: int, date: pd.Timestamp) -> pd.DataFrame:
     columns = [
         "Store",

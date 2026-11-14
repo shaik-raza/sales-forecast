@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sales Forecast</title>
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <section class="auth-screen" id="auth-screen">
+    <div class="auth-orb auth-orb-one"></div>
+    <div class="auth-orb auth-orb-two"></div>
+    <div class="auth-panel">
+      <a class="brand auth-brand" href="/">
+        <span class="brand-mark">↗</span>
+        <span>Sales<span>Forecast</span></span>
+      </a>
+      <p class="eyebrow">Rossmann Store Sales</p>
+      <h1 id="auth-title">Welcome back</h1>
+      <p class="auth-subtitle" id="auth-subtitle">Sign in to access your forecasting workspace.</p>
+      <div class="auth-tabs" role="tablist">
+        <button class="auth-tab active" id="login-tab" type="button" role="tab">Login</button>
+        <button class="auth-tab" id="signup-tab" type="button" role="tab">Signup</button>
+      </div>
+      <form id="auth-form">
+        <label>Email<input id="auth-email" type="email" required autocomplete="email" placeholder="you@example.com"></label>
+        <label>Password<input id="auth-password" type="password" required minlength="6" autocomplete="current-password" placeholder="At least 6 characters"></label>
+        <button class="primary-button full-width auth-submit" id="auth-submit" type="submit">
+          <span class="button-label">Login</span>
+          <span class="spinner" aria-hidden="true"></span>
+        </button>
+      </form>
+      <p class="auth-switch">New here? <button class="text-button" id="toggle-auth" type="button">Create an account</button></p>
+    </div>
+  </section>
+
+  <div class="app-shell" id="dashboard-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#dashboard" aria-label="Sales Forecast home">
+        <span class="brand-mark">↗</span>
+        <span>Sales<span>Forecast</span></span>
+      </a>
+      <nav class="sidebar-nav" aria-label="Main navigation">
+        <a class="nav-item active" href="#dashboard"><span>◈</span>Dashboard</a>
+        <a class="nav-item" href="#forecast"><span>⌁</span>Forecast</a>
+        <a class="nav-item" href="#compare"><span>◎</span>Compare models</a>
+        <a class="nav-item" href="#metrics"><span>▥</span>Metrics</a>
+        <a class="nav-item" href="#history"><span>◷</span>History</a>
+      </nav>
+      <button class="sidebar-signout" id="signout-button" type="button">↪ Sign out</button>
+    </aside>
+
+    <main class="main-content">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">Rossmann Store Sales</p>
+          <h1>Forecast intelligence</h1>
+        </div>
+        <div class="topbar-actions">
+          <button class="theme-toggle" id="theme-toggle" type="button" aria-label="Switch to light theme"><span id="theme-icon">☾</span></button>
+          <div class="status-pill"><span class="status-dot"></span><span id="auth-status">Not signed in</span></div>
+        </div>
+      </header>
+
+      <section id="dashboard-view">
+        <div class="dashboard-kpis" id="dashboard-kpis">
+          <article class="glass-card kpi-card skeleton-card"><span class="skeleton skeleton-label"></span><span class="skeleton skeleton-value"></span><span class="skeleton skeleton-caption"></span></article>
+          <article class="glass-card kpi-card skeleton-card"><span class="skeleton skeleton-label"></span><span class="skeleton skeleton-value"></span><span class="skeleton skeleton-caption"></span></article>
+          <article class="glass-card kpi-card skeleton-card"><span class="skeleton skeleton-label"></span><span class="skeleton skeleton-value"></span><span class="skeleton skeleton-caption"></span></article>
+          <article class="glass-card kpi-card skeleton-card"><span class="skeleton skeleton-label"></span><span class="skeleton skeleton-value"></span><span class="skeleton skeleton-caption"></span></article>
+          <article class="glass-card kpi-card skeleton-card"><span class="skeleton skeleton-label"></span><span class="skeleton skeleton-value"></span><span class="skeleton skeleton-caption"></span></article>
+        </div>
+        <div class="dashboard-lower">
+          <article class="glass-card chart-card">
+            <div class="card-heading"><div><p class="eyebrow">Model performance</p><h3>MAE by model</h3></div><span class="chart-badge">Lower is better</span></div>
+            <div class="chart-wrap"><canvas id="mae-chart"></canvas></div>
+          </article>
+          <article class="glass-card history-card" id="history-summary">
+            <p class="eyebrow">Your activity</p>
+            <h3>Forecast history</h3>
+            <div class="history-loading"><span class="skeleton skeleton-line"></span><span class="skeleton skeleton-line short"></span><span class="skeleton skeleton-line"></span></div>
+            <div class="empty-state" hidden><span class="empty-icon">✦</span><strong>No forecasts yet</strong><p class="muted">Your saved predictions will appear here.</p><a class="primary-button" href="#forecast">Create forecast</a></div>
+            <div class="history-ready" hidden><p class="muted"><strong id="history-count">0</strong> forecasts saved to your account.</p><a class="text-button" href="#history">View full history →</a></div>
+          </article>
+        </div>
+      </section>
+
+      <section class="glass-card page-card content-placeholder" id="forecast-view">
+        <div class="page-heading">
+          <div><p class="eyebrow">Forecast</p><h2>Predict store sales</h2><p class="muted">Choose a store and date. The model fills in the store details automatically.</p></div>
+        </div>
+        <form class="forecast-form" id="forecast-form">
+          <label>Store ID<input id="forecast-store" type="number" min="1" max="1115" required placeholder="1 to 1115"></label>
+          <div class="store-summary" id="store-summary"><span class="summary-icon">⌂</span><div><strong>Store details</strong><small>Enter a valid store ID to load its details.</small></div></div>
+          <label>Date<input id="forecast-date" type="date" required></label>
+          <div class="toggle-row">
+            <label class="toggle-label"><span>Promo</span><input id="forecast-promo" type="checkbox"><span class="toggle"></span></label>
+            <label class="toggle-label"><span>School holiday</span><input id="forecast-school-holiday" type="checkbox"><span class="toggle"></span></label>
+          </div>
+          <label>State holiday<select id="forecast-state-holiday"><option value="0">None</option><option value="1">Public holiday</option><option value="2">Easter holiday</option><option value="3">Christmas</option></select></label>
+          <button class="primary-button" id="forecast-submit" type="submit"><span class="button-label">Predict sales <span>→</span></span><span class="spinner" aria-hidden="true"></span></button>
+        </form>
+        <div class="forecast-result" id="forecast-result" aria-live="polite"><span>Predicted sales</span><strong id="forecast-value">—</strong></div>
+      </section>
+      <section class="glass-card content-placeholder" id="compare-view">
+        <div class="page-heading"><p class="eyebrow">Model comparison</p><h2>See every model's prediction</h2><p class="muted">Use the same store inputs to compare all five predictions side by side.</p></div>
+        <form class="forecast-form" id="compare-form">
+          <label>Store ID<input id="compare-store" type="number" min="1" max="1115" required placeholder="1 to 1115"></label>
+          <div class="store-summary" id="compare-store-summary"><span class="summary-icon">⌂</span><div><strong>Store details</strong><small>Enter a valid store ID to load its details.</small></div></div>
+          <label>Date<input id="compare-date" type="date" required></label>
+          <div class="toggle-row">
+            <label class="toggle-label"><span>Promo</span><input id="compare-promo" type="checkbox"><span class="toggle"></span></label>
+            <label class="toggle-label"><span>School holiday</span><input id="compare-school-holiday" type="checkbox"><span class="toggle"></span></label>
+          </div>
+          <label>State holiday<select id="compare-state-holiday"><option value="0">None</option><option value="1">Public holiday</option><option value="2">Easter holiday</option><option value="3">Christmas</option></select></label>
+          <button class="primary-button" id="compare-submit" type="submit"><span class="button-label">Compare models <span>→</span></span><span class="spinner" aria-hidden="true"></span></button>
+        </form>
+        <div class="compare-output" id="compare-output" hidden>
+          <div class="compare-chart-card"><div class="card-heading"><div><p class="eyebrow">Predictions</p><h3>Sales by model</h3></div></div><div class="chart-wrap"><canvas id="prediction-chart"></canvas></div></div>
+          <div class="leaderboard-card"><div class="card-heading"><div><p class="eyebrow">Validation performance</p><h3>Leaderboard</h3></div></div><p class="best-sentence" id="best-sentence"></p><div class="table-scroll"><table class="metrics-table"><thead><tr><th>Model</th><th>MAE</th><th>RMSE</th><th>MAPE</th><th>RMSPE</th><th>R²</th></tr></thead><tbody id="metrics-table-body"></tbody></table></div></div>
+        </div>
+      </section>
+      <section class="glass-card content-placeholder" id="metrics-view">
+        <p class="eyebrow">Metrics</p>
+        <h2>Model metrics</h2>
+        <p class="muted">Metrics visualization will be added in the next step.</p>
+      </section>
+      <section class="glass-card content-placeholder" id="history-view">
+        <div class="page-heading history-heading">
+          <div><p class="eyebrow">Your activity</p><h2>Forecast history</h2><p class="muted">Review, filter, and download your saved predictions.</p></div>
+          <button class="primary-button" id="download-history" type="button">Download CSV <span>↓</span></button>
+        </div>
+        <div class="history-filters">
+          <label>Search store<input id="history-store-filter" type="search" inputmode="numeric" placeholder="Store ID"></label>
+          <label>Model<select id="history-model-filter"><option value="">All models</option></select></label>
+          <label>Sort by<select id="history-sort"><option value="date-desc">Newest first</option><option value="date-asc">Oldest first</option><option value="sales-desc">Highest sales</option><option value="sales-asc">Lowest sales</option><option value="store-asc">Store ascending</option></select></label>
+        </div>
+        <div class="history-chart-panel">
+          <div class="card-heading"><div><p class="eyebrow">Trend</p><h3>Predicted sales over time</h3></div></div>
+          <div class="chart-wrap"><canvas id="history-chart"></canvas></div>
+        </div>
+        <div class="history-table-wrap" id="history-table-wrap">
+          <table class="metrics-table history-table">
+            <thead><tr><th>Requested</th><th>Store</th><th>Model</th><th>Predicted sales</th></tr></thead>
+            <tbody id="history-table-body"></tbody>
+          </table>
+        </div>
+        <div class="history-empty" id="history-empty" hidden><span class="empty-icon">◷</span><strong>No forecast history yet</strong><p class="muted">Create a forecast to start building your history.</p><a class="primary-button" href="#forecast">Create forecast</a></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="toast-region" id="toast-region" aria-live="polite"></div>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>

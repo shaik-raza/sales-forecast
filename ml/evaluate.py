@@ -7,6 +7,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from sklearn.metrics import r2_score
 
 
 def time_based_split(
@@ -34,7 +35,7 @@ def regression_metrics(
     actual: pd.Series | np.ndarray,
     predicted: pd.Series | np.ndarray,
 ) -> dict[str, float]:
-    """Return MAE, RMSE, MAPE, and Rossmann RMSPE as percentages where applicable."""
+    """Return MAE, RMSE, MAPE, RMSPE, and R²."""
     y_true = np.asarray(actual, dtype=float)
     y_pred = np.asarray(predicted, dtype=float)
 
@@ -56,6 +57,7 @@ def regression_metrics(
         "RMSE": float(np.sqrt(np.mean(errors**2))),
         "MAPE": float(np.mean(np.abs(percentage_errors)) * 100),
         "RMSPE": float(np.sqrt(np.mean(percentage_errors**2)) * 100),
+        "R2": float(r2_score(y_true, y_pred)),
     }
 
 
